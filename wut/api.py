@@ -13,6 +13,7 @@ MAX_TITLE_LENGTH = 255
 
 
 def raise_for_status(f):
+    """Raise exception if returned ``request.Response`` is bogus."""
     @wraps(f)
     def wrapped(*args, **kwargs):
         raw = f(*args, **kwargs)
@@ -22,6 +23,7 @@ def raise_for_status(f):
 
 
 def return_json(f):
+    """Auto-convert returned ``requests.Response``s to JSON."""
     @wraps(f)
     def wrapped(*args, **kwargs):
         raw = kwargs.pop('raw', False)
@@ -36,6 +38,7 @@ def return_json(f):
 
 
 def extract(key):
+    """Automatically unwrap dict-likes containing a key of interest."""
     def wrapper_builder(f):
         @wraps(f)
         def wrapped(self, arg, *args, **kwargs):
@@ -48,6 +51,7 @@ def extract(key):
 
 
 def allowed_keywords(keywords):
+    """Raise an error if a key in kwargs falls outside of an allowed set."""
     keywords = frozenset(keywords)
 
     def wrapper_builder(f):
@@ -62,6 +66,7 @@ def allowed_keywords(keywords):
 
 
 class WunderListAPI(object):
+    """Wunderlist API wrapper. Does very little input validation."""
     API_VERSION = 1
     API_BASE_URL = 'http://a.wunderlist.com/api'
 
