@@ -3,10 +3,13 @@ from functools import wraps
 from hammock import Hammock
 import requests
 
+TASK_CREATE_PROPERTIES = ('title', 'assignee_id', 'completed',
+                          'recurrence_type', 'recurrence_count', 'due_date',
+                          'starred')
 
-TASK_UPDATE_PROPERTIES = ['title', 'assignee_id', 'completed',
-                          'recurrence_type', 'recurrent_count', 'due_date',
-                          'starred', 'remove']
+TASK_UPDATE_PROPERTIES = TASK_CREATE_PROPERTIES + ('remove',)
+
+MAX_TITLE_LENGTH = 255
 
 
 def raise_for_status(f):
@@ -83,6 +86,15 @@ class WunderListAPI(object):
     @return_json
     def lists(self):
         return self.client.lists().GET(headers=self.headers)
+
+    @return_json
+    @allowed_keywords(TASK_CREATE_PROPERTIES)
+    @extract('id')
+    def create_task(self, list_id, **kwargs):
+        if 'title' not in kwargs:  # TODO: kw-only argument (vim sucks)
+            raise KeyError('title is required')
+        kwargs['list_id'] = list_id
+        return self.client.tasks().POST(json=kwargs, headers=self.headers)
 
     @return_json
     @allowed_keywords(TASK_UPDATE_PROPERTIES)

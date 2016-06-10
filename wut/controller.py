@@ -40,6 +40,8 @@ class TasksModeController(SubController):
             self.root.display_list_selection()
         elif key.lower() == 'r':
             return self.refresh()
+        elif key.lower() == 'n':
+            self.root.create_new_task()
         else:
             return super().keypress(size, key)
 
@@ -76,6 +78,26 @@ class TasksModeController(SubController):
                 user_data=(task, widget)
             )
 
+    def add_new_task(self, task):
+        self.view.insert_new_task_entry(task, self.task_widget_change_handler)
+
+
+class NewTaskController(SubController):
+    VIEW_WIDGET = 'new_task_view'
+
+    def keypress(self, size, key):
+        if key == 'esc':
+            self.root.display_task_list()
+        else:
+            super().keypress(size, key)
+
+    def handler(self, new_task_title):
+        self.root.display_task_list()
+        active_list = self.root.tasks_controller.active_list
+        task = self.model.create_task(active_list, title=new_task_title)
+        self.root.tasks_controller.add_new_task(task)
+        self.view.clear_new_task_text()
+
 
 class Controller(urwid.MainLoop):
     def __init__(self, model, view):
@@ -83,6 +105,8 @@ class Controller(urwid.MainLoop):
         self.view = view
         self.tasks_controller = TasksModeController(self, self.view)
         self.lists_controller = ListSelectionController(self, self.view)
+        self.new_task_controller = NewTaskController(self, self.view)
+        self.view.new_task_callback = self.new_task_controller.handler
         super().__init__(self.lists_controller,
                          view.palette,
                          unhandled_input=self.keypress)
@@ -112,3 +136,6 @@ class Controller(urwid.MainLoop):
 
     def display_task_list(self):
         self.active_controller = self.tasks_controller
+
+    def create_new_task(self):
+        self.active_controller = self.new_task_controller
