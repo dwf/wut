@@ -6,7 +6,7 @@ A console-based Wunderlist client written in Python using the
 
 Requires:
 
-* [wunderpy2](https://github.com/mieubrisse/wunderpy2)
+* [hammock](https://github.com/kadirpekel/hammock)
 * [urwid](http://urwid.org/)
 * [pyyaml](http://pyyaml.org/)
 
