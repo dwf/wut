@@ -14,4 +14,4 @@ if __name__ == "__main__":
     model = WunderListAPI(config['client_id'], config['token'])
     view = View(model)
     controller = Controller(model, view)
-    controller.run(config['which_list'])
+    controller.run()

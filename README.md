@@ -12,6 +12,5 @@ Requires:
 
 Expects a YAML config at `~/.wutrc` with the following keys:
 
- * `which_list` -- name of list to retrieve
  * `client_id` -- Wunderlist client ID
  * `token` -- Wunderlist API token
