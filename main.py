@@ -4,73 +4,14 @@ import os
 import urwid
 import yaml
 from wut.api import WunderListAPI
-
-
-def show_or_exit(key):
-    if key in ('q', 'Q'):
-        raise urwid.ExitMainLoop()
-
-
-class TaskPile(urwid.Pile):
-    def __init__(self, client, which_list, focus_item=None,
-                 completion_timeout=0.8):
-        super().__init__([], focus_item)
-        self.client = client
-        self.which_list = which_list
-        self.completion_timeout = completion_timeout
-        self.main_loop = None
-        self.refresh()
-
-    def refresh(self):
-        list_descr, = [l for l in client.lists()
-                       if l['title'] == self.which_list]
-        tasks = self.client.tasks(list_descr)[::-1]
-        buttons = [urwid.AttrMap(
-            urwid.CheckBox(task['title'],
-                           on_state_change=self.checkbox_change_handler,
-                           user_data=task),
-            None,
-            focus_map='reversed'
-        ) for task in tasks]
-        self.contents.clear()
-        self.contents.extend(list(zip(buttons,
-                                      itertools.repeat(('pack', None)))))
-        if len(self.contents):
-            self.focus_position = 0
-
-    def checkbox_change_handler(self, checkbox, new_state, task):
-        assert self.main_loop is not None
-        alarm = getattr(checkbox, 'alarm', None)
-        if alarm:
-            self.main_loop.remove_alarm(alarm)
-        else:
-            checkbox.alarm = self.main_loop.set_alarm_in(
-                self.completion_timeout, self.mark_completed,
-                user_data=(task, checkbox)
-            )
-
-    def mark_completed(self, _, user_data):
-        task, checkbox = user_data
-        self.client.update_task(task, completed=True)
-        elems = [e for e in self.contents if e[0].base_widget == checkbox]
-        assert len(elems) == 1
-        self.contents.remove(elems[0])
-
-    def keypress(self, size, key):
-        if key.lower() == 'r':
-            self.refresh()
-        else:
-            return super().keypress(size, key)
+from wut.controller import Controller
+from wut.view import View
 
 
 if __name__ == "__main__":
     with open(os.path.expanduser('~/.wutrc')) as f:
         config = yaml.load(f)
-    client = WunderListAPI(config['client_id'], config['token'])
-    pile = TaskPile(client, config['which_list'])
-    listbox = urwid.ListBox([pile])
-    loop = urwid.MainLoop(urwid.Padding(listbox, left=2, right=2),
-                          [('reversed', 'black', 'white', 'standout')],
-                          unhandled_input=show_or_exit)
-    pile.main_loop = loop
-    loop.run()
+    model = WunderListAPI(config['client_id'], config['token'])
+    view = View(model)
+    controller = Controller(model, view)
+    controller.run(config['which_list'])
