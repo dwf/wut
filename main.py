@@ -26,7 +26,9 @@ class TaskPile(urwid.Pile):
                        if l['title'] == self.which_list]
         tasks = self.client.tasks(list_descr)[::-1]
         buttons = [urwid.AttrMap(
-            urwid.CheckBox(task['title']),
+            urwid.CheckBox(task['title'],
+                           on_state_change=self.checkbox_change_handler,
+                           user_data=task),
             None,
             focus_map='reversed'
         ) for task in tasks]
@@ -35,6 +37,24 @@ class TaskPile(urwid.Pile):
                                       itertools.repeat(('pack', None)))))
         if len(self.contents):
             self.focus_position = 0
+
+    def checkbox_change_handler(self, checkbox, new_state, task):
+        assert self.main_loop is not None
+        alarm = getattr(checkbox, 'alarm', None)
+        if alarm:
+            self.main_loop.remove_alarm(alarm)
+        else:
+            checkbox.alarm = self.main_loop.set_alarm_in(
+                self.completion_timeout, self.mark_completed,
+                user_data=(task, checkbox)
+            )
+
+    def mark_completed(self, _, user_data):
+        task, checkbox = user_data
+        self.client.update_task(task, completed=True)
+        elems = [e for e in self.contents if e[0].base_widget == checkbox]
+        assert len(elems) == 1
+        self.contents.remove(elems[0])
 
     def keypress(self, size, key):
         if key.lower() == 'r':
