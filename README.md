@@ -10,7 +10,9 @@ Requires:
 * [urwid](http://urwid.org/)
 * [pyyaml](http://pyyaml.org/)
 
-Expects a YAML config at `~/.wutrc` with the following keys:
+Expects a YAML config at the location specified by `WUT_CONFIG_PATH` (or
+`~/.wutrc` by default if that environment variable is not set) with the
+following keys:
 
  * `client_id` -- Wunderlist client ID
  * `token` -- Wunderlist API token
