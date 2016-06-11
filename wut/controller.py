@@ -4,11 +4,10 @@ import urwid
 class SubController(urwid.WidgetWrap):
     def __init__(self, root, view):
         self.root = root
-        super().__init__(getattr(view, self.VIEW_WIDGET))
-
-    @property
-    def view(self):
-        return self.root.view
+        self.view = view
+        if hasattr(self, 'handler'):
+            self.view.register_callback(self.handler)
+        super().__init__(view)
 
     @property
     def model(self):
@@ -21,29 +20,31 @@ class SubController(urwid.WidgetWrap):
         return self.root.remove_alarm(*args, **kwargs)
 
 
-class ListSelectionController(SubController):
-    VIEW_WIDGET = 'lists_view'
-
+class ListsController(SubController):
     def refresh(self):
-        self.view.fill_lists_view(self.selection_handler)
+        self.view.populate()
 
-    def selection_handler(self, widget, user_data):
+    def handler(self, widget, user_data):
         self.root.select_list(user_data)
 
 
-class TasksModeController(SubController):
-    VIEW_WIDGET = 'tasks_view'
+class TasksController(SubController):
     completion_timeout = 0.8
 
     def keypress(self, size, key):
-        if key == 'backspace':
-            self.root.display_list_selection()
+        if key == 'backspace' or key == 'left':
+            self.abort()
         elif key.lower() == 'r':
             return self.refresh()
         elif key.lower() == 'n':
-            self.root.create_new_task()
+            self.root.display_create_dialog()
+        elif key.lower() == 'e':
+            self.root.display_edit_dialog()
         else:
             return super().keypress(size, key)
+
+    def abort(self):
+        self.root.display_list_selection()
 
     @property
     def active_list(self):
@@ -59,16 +60,14 @@ class TasksModeController(SubController):
             self.refresh(reset_focus=True)
 
     def refresh(self, reset_focus=False):
-        self.view.fill_tasks_view(self.active_list,
-                                  self.task_widget_change_handler,
-                                  reset_focus=reset_focus)
+        self.view.populate(self.active_list, reset_focus=reset_focus)
 
     def mark_completed(self, _, user_data):
         task, widget = user_data
         self.model.update_task(task, completed=True)
         self.view.remove_task_element(widget)
 
-    def task_widget_change_handler(self, widget, new_state, task):
+    def handler(self, widget, new_state, task):
         alarm = getattr(widget, 'alarm', None)
         if alarm:
             self.remove_alarm(alarm)
@@ -79,34 +78,61 @@ class TasksModeController(SubController):
             )
 
     def add_new_task(self, task):
-        self.view.insert_new_task_entry(task, self.task_widget_change_handler)
+        self.view.insert_new(task)
+
+    def update_element(self, index, task):
+        self.view.replace_task_element(index, task)
 
 
-class NewTaskController(SubController):
-    VIEW_WIDGET = 'new_task_view'
+class EditTaskController(SubController):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def keypress(self, size, key):
         if key == 'esc':
-            self.root.display_task_list()
+            self.abort()
         else:
             super().keypress(size, key)
 
-    def handler(self, new_task_title):
+    def abort(self):
         self.root.display_task_list()
+
+    def handler(self, task, index, task_title):
+        self.root.display_task_list()
+        if len(task_title) == 0:
+            return
+        task = self.model.update_task(task, title=task_title)
+        self.root.tasks_controller.update_element(index, task)
+        self.view.clear()
+
+    def refresh(self):
+        self.view.populate()
+
+
+class CreateController(EditTaskController):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.view.register_callback(self.handler)
+
+    def handler(self, title):
         active_list = self.root.tasks_controller.active_list
-        task = self.model.create_task(active_list, title=new_task_title)
+        self.root.display_task_list()
+        if len(title) == 0:
+            return
+        task = self.model.create_task(active_list, title=title)
         self.root.tasks_controller.add_new_task(task)
-        self.view.clear_new_task_text()
+        self.view.clear()
 
 
 class Controller(urwid.MainLoop):
     def __init__(self, model, view):
         self.model = model
         self.view = view
-        self.tasks_controller = TasksModeController(self, self.view)
-        self.lists_controller = ListSelectionController(self, self.view)
-        self.new_task_controller = NewTaskController(self, self.view)
-        self.view.new_task_callback = self.new_task_controller.handler
+        self.tasks_controller = TasksController(self, view.tasks_view)
+        self.lists_controller = ListsController(self, view.lists_view)
+        self.create_controller = CreateController(self, view.create_view)
+        self.edit_task_controller = EditTaskController(self,
+                                                       view.edit_task_view)
         super().__init__(self.lists_controller,
                          view.palette,
                          unhandled_input=self.keypress)
@@ -137,5 +163,9 @@ class Controller(urwid.MainLoop):
     def display_task_list(self):
         self.active_controller = self.tasks_controller
 
-    def create_new_task(self):
-        self.active_controller = self.new_task_controller
+    def display_create_dialog(self):
+        self.active_controller = self.create_controller
+
+    def display_edit_dialog(self):
+        self.active_controller = self.edit_task_controller
+        self.active_controller.refresh()

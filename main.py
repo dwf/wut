@@ -1,7 +1,5 @@
 """Prototype of a Wunderlist terminal client."""
-import itertools
 import os
-import urwid
 import yaml
 from wut.api import WunderListAPI
 from wut.controller import Controller

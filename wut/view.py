@@ -1,33 +1,116 @@
 from __future__ import print_function
-import itertools
+from contextlib import contextmanager
+from functools import partial
 import urwid
-from api import MAX_TITLE_LENGTH
+from .widgets import TitleEdit, TaskPile, ListPile
 
 
-class MaxLengthMixin:
-    def set_edit_text(self, value):
-        if len(value) >= self.max_length:
-            print('\a', end=None)
-        else:
-            super().set_edit_text(value)
+@contextmanager
+def preserve_focus(widget, delta=0, reset=False):
+    try:
+        old_focus = widget.focus_position
+    except IndexError:
+        old_focus = None
+        reset = True
+    yield
+    if reset:
+        try:
+            widget.focus_position = 0
+        except IndexError:
+            pass
+    elif old_focus is not None:
+        widget.focus_position = old_focus + delta
 
 
-class CallbackEdit(urwid.Edit):
-    def __init__(self, enter_callback, *args, **kwargs):
-        self.enter_callback = enter_callback
-        super().__init__(*args, **kwargs)
+class SelectorView(urwid.WidgetWrap):
+    def __init__(self, model):
+        self._pile = self.pile_class()
+        self.model = model
+        super().__init__(urwid.Padding(urwid.ListBox([self._pile]),
+                                       left=2, right=2))
 
-    def keypress(self, size, key):
-        if key == 'enter':
-            self.enter_callback(self.edit_text)
-        else:
-            super().keypress(size, key)
+    @property
+    def focus(self):
+        return self._pile.focus
+
+    @property
+    def focus_position(self):
+        return self._pile.focus_position
+
+    def register_callback(self, callback):
+        self._pile.callback = callback
 
 
-class TitleEdit(MaxLengthMixin, CallbackEdit):
-    def __init__(self, *args, **kwargs):
-        self.max_length = MAX_TITLE_LENGTH
-        super().__init__(*args, **kwargs)
+class TasksView(SelectorView):
+    pile_class = TaskPile
+
+    def populate(self, list_descr, reset_focus=False):
+        with preserve_focus(self._pile, reset=reset_focus):
+            tasks = self.model.tasks(list_descr)[::-1]
+            self._pile.clear()
+            self._pile.extend(tasks)
+
+    @property
+    def focus_task(self):
+        return self._pile[self._pile.focus_position]
+
+    def insert_new(self, task, index=0):
+        with preserve_focus(self._pile, delta=1):
+            self._pile.insert(0, task)
+
+    def remove_task_element(self, element):
+        index, = [idx for idx, (elem, _) in enumerate(self._pile.contents)
+                  if elem == element or elem.base_widget == element]
+        del self._pile[index]
+
+    def replace_task_element(self, index, task):
+        self._pile[index] = task
+
+
+class ListsView(SelectorView):
+    pile_class = ListPile
+
+    def populate(self):
+        with preserve_focus(self._pile):
+            lists = self.model.lists()
+            self._pile.clear()
+            self._pile.extend(lists)
+
+
+class EditView(urwid.WidgetWrap):
+    def __init__(self, model, tasks_view, caption, callback=None):
+        self._edit_widget = TitleEdit(callback)
+        self.tasks_view = tasks_view
+        super().__init__(urwid.Overlay(
+            urwid.LineBox(
+                urwid.Padding(urwid.ListBox([
+                    urwid.Text(caption),
+                    urwid.Divider(),
+                    urwid.LineBox(self._edit_widget)
+                ]), left=3, right=3)
+            ),
+            tasks_view, width=('relative', 80),
+            height=('relative', 30), align='center', valign='middle',
+            min_height=8))
+
+    def register_callback(self, callback):
+        self._edit_widget.enter_callback = callback
+
+    def clear(self):
+        self._edit_widget.set_edit_text('')
+
+
+class EditExistingTaskView(EditView):
+    def populate(self):
+        task = self.tasks_view.focus_task
+        position = self.tasks_view.focus_position
+        self._edit_widget.enter_callback = partial(self._base_callback,
+                                                   task, position)
+        self._edit_widget.set_edit_text(task['title'])
+        self._edit_widget.set_edit_pos(self._edit_widget.max_length)
+
+    def register_callback(self, callback):
+        self._base_callback = callback
 
 
 class View:
@@ -35,96 +118,9 @@ class View:
 
     def __init__(self, model):
         self.model = model
-        self._tasks_pile = urwid.Pile([])
-        self.tasks_view = urwid.Padding(urwid.ListBox([self._tasks_pile]),
-                                        left=2, right=2)
-        self._lists_pile = urwid.Pile([])
-        self.lists_view = urwid.Padding(urwid.ListBox([self._lists_pile]),
-                                        left=2, right=2)
-        self._new_task_edit = TitleEdit(None)
-        self.new_task_view = urwid.Overlay(
-            urwid.LineBox(
-                urwid.Padding(urwid.ListBox([
-                    urwid.Text('Title for new task:'),
-                    urwid.Divider(),
-                    urwid.LineBox(self._new_task_edit)
-                ]), left=3, right=3)
-            ),
-            self.tasks_view, width=('relative', 80),
-            height=('relative', 30), align='center', valign='middle',
-            min_height=8)
-
-    @property
-    def new_task_callback(self):
-        return self._new_task_edit.enter_callback
-
-    @new_task_callback.setter
-    def new_task_callback(self, value):
-        self._new_task_edit.enter_callback = value
-
-    def clear_new_task_text(self):
-        self._new_task_edit.set_edit_text('')
-
-    def fill_tasks_view(self, list_descr, change_handler, reset_focus=False):
-        try:
-            old_focus = self._tasks_pile.focus_position
-        except IndexError:
-            old_focus = None
-            reset_focus = True
-        tasks = self.model.tasks(list_descr)[::-1]
-        buttons = [self._create_task_checkbox_entry(task, change_handler)
-                   for task in tasks]
-        contents = self._tasks_pile.contents
-        contents.clear()
-        contents.extend(list(zip(buttons, itertools.repeat(('pack', None)))))
-        try:
-            self._tasks_pile.focus_position = 0 if reset_focus else old_focus
-        except IndexError:
-            pass
-
-    @staticmethod
-    def _create_task_checkbox_entry(task, change_handler):
-        return urwid.AttrMap(
-            urwid.CheckBox(task['title'], on_state_change=change_handler,
-                           user_data=task),
-            None,
-            focus_map='reversed'
-        )
-
-    def insert_new_task_entry(self, task, change_handler):
-        try:
-            old_focus = self._tasks_pile.focus_position
-        except IndexError:
-            old_focus = None
-
-        new_entry = (self._create_task_checkbox_entry(task, change_handler),
-                     ('pack', None))
-        self._tasks_pile.contents.insert(0, new_entry)
-
-        if old_focus is not None:
-            self._tasks_pile.focus_position = old_focus + 1
-
-    def fill_lists_view(self, selection_handler):
-        try:
-            old_focus = self._tasks_pile.focus_position
-        except IndexError:
-            old_focus = None
-            reset_focus = True
-        lists = self.model.lists()
-        buttons = [urwid.AttrMap(
-            urwid.Button(list_['title'],
-                         on_press=selection_handler,
-                         user_data=list_),
-            None,
-            focus_map='reversed'
-        ) for list_ in lists]
-        contents = self._lists_pile.contents
-        contents.clear()
-        contents.extend(list(zip(buttons, itertools.repeat(('pack', None)))))
-        self._lists_pile.focus_position = 0 if reset_focus else old_focus
-
-    def remove_task_element(self, element):
-        elems = [e for e in self._tasks_pile.contents
-                 if e[0].base_widget == element]
-        assert len(elems) == 1
-        self._tasks_pile.contents.remove(elems[0])
+        self.lists_view = ListsView(model)
+        self.tasks_view = TasksView(model)
+        self.create_view = EditView(model, self.tasks_view,
+                                    'Title for new task:')
+        self.edit_task_view = EditExistingTaskView(model, self.tasks_view,
+                                                   'New title for task:')
