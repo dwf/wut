@@ -23,9 +23,8 @@ def preserve_focus(widget, delta=0, reset=False):
 
 
 class SelectorView(urwid.WidgetWrap):
-    def __init__(self, model):
+    def __init__(self):
         self._pile = self.pile_class()
-        self.model = model
         super().__init__(urwid.Padding(urwid.ListBox([self._pile]),
                                        left=2, right=2))
 
@@ -44,9 +43,8 @@ class SelectorView(urwid.WidgetWrap):
 class TasksView(SelectorView):
     pile_class = TaskPile
 
-    def populate(self, list_descr, reset_focus=False):
+    def populate(self, tasks, reset_focus=False):
         with preserve_focus(self._pile, reset=reset_focus):
-            tasks = self.model.tasks(list_descr)[::-1]
             self._pile.clear()
             self._pile.extend(tasks)
 
@@ -70,15 +68,14 @@ class TasksView(SelectorView):
 class ListsView(SelectorView):
     pile_class = ListPile
 
-    def populate(self):
+    def populate(self, lists):
         with preserve_focus(self._pile):
-            lists = self.model.lists()
             self._pile.clear()
             self._pile.extend(lists)
 
 
 class EditView(urwid.WidgetWrap):
-    def __init__(self, model, tasks_view, caption, callback=None):
+    def __init__(self, tasks_view, caption, callback=None):
         self._edit_widget = TitleEdit(callback)
         self.tasks_view = tasks_view
         super().__init__(urwid.Overlay(
@@ -116,11 +113,10 @@ class EditExistingTaskView(EditView):
 class View:
     palette = [('reversed', 'black', 'white', 'standout')]
 
-    def __init__(self, model):
-        self.model = model
-        self.lists_view = ListsView(model)
-        self.tasks_view = TasksView(model)
-        self.create_view = EditView(model, self.tasks_view,
+    def __init__(self):
+        self.lists_view = ListsView()
+        self.tasks_view = TasksView()
+        self.create_view = EditView(self.tasks_view,
                                     'Title for new task:')
-        self.edit_task_view = EditExistingTaskView(model, self.tasks_view,
+        self.edit_task_view = EditExistingTaskView(self.tasks_view,
                                                    'New title for task:')

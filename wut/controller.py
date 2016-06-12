@@ -22,7 +22,8 @@ class SubController(urwid.WidgetWrap):
 
 class ListsController(SubController):
     def refresh(self):
-        self.view.populate()
+        lists = self.model.lists()
+        self.view.populate(lists)
 
     def handler(self, widget, user_data):
         self.root.select_list(user_data)
@@ -60,7 +61,8 @@ class TasksController(SubController):
             self.refresh(reset_focus=True)
 
     def refresh(self, reset_focus=False):
-        self.view.populate(self.active_list, reset_focus=reset_focus)
+        tasks = self.model.tasks(self.active_record)
+        self.view.populate(tasks, reset_focus=reset_focus)
 
     def mark_completed(self, _, user_data):
         task, widget = user_data

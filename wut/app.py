@@ -11,6 +11,6 @@ def main():
     with open(config_filename) as f:
         config = yaml.load(f)
     model = WunderListAPI(config['client_id'], config['token'])
-    view = View(model)
+    view = View()
     controller = Controller(model, view)
     controller.run()
