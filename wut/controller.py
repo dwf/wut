@@ -48,12 +48,12 @@ class TasksController(SubController):
         self.root.display_list_selection()
 
     @property
-    def active_list(self):
-        return getattr(self, '_active_list', {'id': None})
+    def active_record(self):
+        return getattr(self, '_active_record', {'id': None})
 
-    @active_list.setter
-    def active_list(self, new):
-        old, self._active_list = self.active_list, new
+    @active_record.setter
+    def active_record(self, new):
+        old, self._active_record = self.active_record, new
         # Could maintain per-list foci...
         if new['id'] == old['id']:
             self.refresh(reset_focus=False)
@@ -117,11 +117,11 @@ class CreateController(EditTaskController):
         self.view.register_callback(self.handler)
 
     def handler(self, title):
-        active_list = self.root.tasks_controller.active_list
+        active_record = self.root.tasks_controller.active_record
         self.root.display_task_list()
         if len(title) == 0:
             return
-        task = self.model.create_task(active_list, title=title)
+        task = self.model.create_task(active_record, title=title)
         self.root.tasks_controller.add_new_task(task)
         self.view.clear()
 
@@ -156,7 +156,7 @@ class Controller(urwid.MainLoop):
         super().run(*args, **kwargs)
 
     def select_list(self, list_descr):
-        self.tasks_controller.active_list = list_descr
+        self.tasks_controller.active_record = list_descr
         self.display_task_list()
 
     def display_list_selection(self):
