@@ -15,4 +15,4 @@ Expects a YAML config at the location specified by `WUT_CONFIG_PATH` (or
 following keys:
 
  * `client_id` -- Wunderlist client ID
- * `token` -- Wunderlist API token
+ * `access_token` -- Wunderlist API token

@@ -10,7 +10,7 @@ def main():
                                      os.path.expanduser('~/.wutrc'))
     with open(config_filename) as f:
         config = yaml.load(f)
-    model = WunderListAPI(config['client_id'], config['token'])
+    model = WunderListAPI(config['client_id'], config['access_token'])
     view = View()
     controller = Controller(model, view)
     controller.run()
