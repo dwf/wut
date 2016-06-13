@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from functools import wraps
+from itertools import chain
 from hammock import Hammock
 
 
@@ -23,6 +24,30 @@ def raise_for_status(f):
         raw.raise_for_status()
         return raw
     return wrapped
+
+
+def reorder(entities, positions):
+    """From the Wunderlist API docs:
+
+    To determine the order of resources the following convention shall be
+    followed:
+
+     * Existing resources follow the order of their ids in the
+       "values" array
+     * Ids in the "values" array which do not refer to an
+       existing resource are simply ignored
+     * Existing resources with ids that do not appear in the values array
+       appear at the end ordered by id ASC and then local id ASC.
+
+    I have no idea what "local id" means and I would have thought ids were
+    unique.
+
+    """
+    entities = {e['id']: e for e in entities}
+    not_appearing = sorted(entities.keys() - set(positions))
+    ordered = list(chain((entities[p] for p in positions if p in entities),
+                         (entities[p] for p in not_appearing)))
+    return ordered
 
 
 def extract(key):
@@ -71,11 +96,16 @@ class WunderListAPI(object):
                 'X-Access-Token': self.access_token}
 
     @extract('id')
-    @return_json
-    def tasks(self, list_id, completed=False):
+    def tasks(self, list_id, completed=False, ordered=True):
         params = {'list_id': list_id, 'completed': completed}
         tasks = (self.client.tasks().GET(params=params,
                                          headers=self.headers).json())
+        if ordered:
+            del params['completed']
+            # Why is this a list?
+            positions, = (self.client.task_positions()
+                          .GET(params=params, headers=self.headers).json())
+            tasks = reorder(tasks, positions['values'])
         return tasks
 
     @extract('id')
@@ -83,15 +113,32 @@ class WunderListAPI(object):
         return self.client.tasks(id_).GET(headers=self.headers).json()
 
     @extract('id')
-    def subtasks(self, task_id, completed=False):
+    def subtasks(self, task_id, completed=False, ordered=True):
         # You can also grab all(?) subtasks based on a list_id, but ignore
         # that for now.
         params = {'task_id': task_id, 'completed': completed}
-        return (self.client.subtasks().GET(params=params,
-                                           headers=self.headers).json()
+        subtasks = self.client.subtasks().GET(params=params,
+                                              headers=self.headers).json()
+        if ordered:
+            del params['completed']
+            # Why is this a list?
+            positions, = (self.client.subtask_positions()
+                          .GET(params=params, headers=self.headers).json())
+            subtasks = reorder(subtasks, positions['values'])
+        return subtasks
 
-    def lists(self):
-        return self.client.lists().GET(headers=self.headers).json()
+    def lists(self, ordered=True, inbox_first=True):
+        lists = self.client.lists().GET(headers=self.headers).json()
+        if ordered:
+            # Why is this a list?
+            positions, = (self.client.list_positions()
+                          .GET(headers=self.headers).json())
+            lists = reorder(lists, positions['values'])
+        inbox, = [l for l in lists if l['list_type'] == 'inbox']
+        if inbox_first:
+            del lists[lists.index(inbox)]
+            lists.insert(0, inbox)
+        return lists
 
     @extract('id')
     def list(self, id_):
