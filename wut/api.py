@@ -1,7 +1,6 @@
 from collections.abc import Mapping
 from functools import wraps
 from hammock import Hammock
-import requests
 
 
 SUBTASK_CREATE_PROPERTIES = ('title', 'completed')
@@ -23,21 +22,6 @@ def raise_for_status(f):
         raw = f(*args, **kwargs)
         raw.raise_for_status()
         return raw
-    return wrapped
-
-
-def return_json(f):
-    """Auto-convert returned ``requests.Response``s to JSON."""
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        raw = kwargs.pop('raw', False)
-        returned = f(*args, **kwargs)
-        returned.raise_for_status()
-        assert isinstance(returned, requests.Response)
-        if raw:
-            return returned
-        else:
-            return returned.json()
     return wrapped
 
 
@@ -90,37 +74,34 @@ class WunderListAPI(object):
     @return_json
     def tasks(self, list_id, completed=False):
         params = {'list_id': list_id, 'completed': completed}
-        return self.client.tasks().GET(params=params, headers=self.headers)
+        tasks = (self.client.tasks().GET(params=params,
+                                         headers=self.headers).json())
+        return tasks
 
     @extract('id')
-    @return_json
     def task(self, id_):
-        return self.client.tasks(id_).GET(headers=self.headers)
+        return self.client.tasks(id_).GET(headers=self.headers).json()
 
     @extract('id')
-    @return_json
     def subtasks(self, task_id, completed=False):
         # You can also grab all(?) subtasks based on a list_id, but ignore
         # that for now.
         params = {'task_id': task_id, 'completed': completed}
-        return self.client.subtasks().GET(params=params, headers=self.headers)
+        return (self.client.subtasks().GET(params=params,
+                                           headers=self.headers).json()
 
-    @return_json
     def lists(self):
-        return self.client.lists().GET(headers=self.headers)
+        return self.client.lists().GET(headers=self.headers).json()
 
     @extract('id')
-    @return_json
     def list(self, id_):
-        return self.client.lists(id_).GET(headers=self.headers)
+        return self.client.lists(id_).GET(headers=self.headers).json()
 
-    @return_json
     @allowed_keywords(TASK_CREATE_PROPERTIES)
     @extract('id')
     def create_task(self, list_id, **kwargs):
         return self._create(self.client.tasks, 'list_id', list_id, **kwargs)
 
-    @return_json
     @allowed_keywords(SUBTASK_CREATE_PROPERTIES)
     @extract('id')
     def create_subtask(self, task_id, **kwargs):
@@ -130,24 +111,23 @@ class WunderListAPI(object):
         if 'title' not in kwargs:  # TODO: kw-only argument (vim sucks)
             raise KeyError('title is required')
         kwargs[container_key] = container_id
-        return endpoint.POST(json=kwargs, headers=self.headers)
+        return endpoint.POST(json=kwargs, headers=self.headers).json()
 
-    @return_json
     @allowed_keywords(TASK_UPDATE_PROPERTIES)
     def update_task(self, task, **kwargs):
         return self._update(self.client.tasks, task, **kwargs)
 
-    @return_json
     @allowed_keywords(SUBTASK_UPDATE_PROPERTIES)
     def update_subtask(self, subtask, **kwargs):
         return self._update(self.client.subtasks, subtask, **kwargs)
 
     def _update(self, endpoint, entity, **kwargs):
         kwargs['revision'] = int(entity['revision'])
-        return endpoint(entity['id']).PATCH(json=kwargs, headers=self.headers)
+        return (endpoint(entity['id'])
+                .PATCH(json=kwargs, headers=self.headers).json())
 
     @raise_for_status
     def delete_task(self, task):
         params = {'revision': task['revision']}
-        return self.client.tasks(task['id']).DELETE(params=params,
-                                                    headers=self.headers)
+        return (self.client.tasks(task['id'])
+                .DELETE(params=params, headers=self.headers).json())
