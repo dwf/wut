@@ -87,9 +87,6 @@ class TasksController(SubController):
 
 
 class EditTaskController(SubController):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def keypress(self, size, key):
         if key == 'esc':
             self.abort()
