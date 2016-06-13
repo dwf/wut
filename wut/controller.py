@@ -152,10 +152,6 @@ class EditTaskController(SubController):
 
 class CreateController(EditTaskController):
     """Controller that handles the task/subtask creation dialog."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.view.register_callback(self.handler)
-
     def handler(self, title):
         self.root.display_task_list()
         if len(title) == 0:
