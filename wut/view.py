@@ -20,7 +20,8 @@ def preserve_focus(widget, delta=0, reset=False):
             pass
     elif old_focus is not None:
         try:
-            widget.focus_position = old_focus + delta
+            widget.focus_position = min(old_focus + delta,
+                                        len(widget.contents) - 1)
         except IndexError:
             # This might fail when e.g. switching between
             # completed/not completed view.
