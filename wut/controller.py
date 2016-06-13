@@ -41,11 +41,19 @@ class TasksController(SubController):
             self.root.display_create_dialog()
         elif key.lower() == 'e':
             self.root.display_edit_dialog()
+        elif key.lower() == 's' and self.active_record['type'] == 'list':
+            self.active_record = self.view.focus_entity
+            self.refresh()
         else:
             return super().keypress(size, key)
 
     def abort(self):
-        self.root.display_list_selection()
+        if self.active_record['type'] == 'list':
+            self.root.display_list_selection()
+        else:
+            assert self.active_record['type'] == 'task'
+            list_id = self.active_record['list_id']
+            self.active_record = self.model.list(list_id)
 
     @property
     def active_record(self):
@@ -61,13 +69,28 @@ class TasksController(SubController):
             self.refresh(reset_focus=True)
 
     def refresh(self, reset_focus=False):
-        tasks = self.model.tasks(self.active_record)
-        self.view.populate(tasks, reset_focus=reset_focus)
+        if self.active_record['type'] == 'list':
+            f = self.model.tasks
+        else:
+            assert self.active_record['type'] == 'task'
+            f = self.model.subtasks
+        entities = f(self.active_record)
+        self.view.populate(entities, reset_focus=reset_focus)
 
-    def mark_completed(self, _, user_data):
-        task, widget = user_data
-        self.model.update_task(task, completed=True)
-        self.view.remove_task_element(widget)
+    def create_entity(self, **kwargs):
+        if self.active_record['type'] == 'list':
+            endpoint = self.model.create_task
+        else:
+            assert self.active_record['type'] == 'task'
+            endpoint = self.model.create_subtask
+        return endpoint(self.active_record['id'], **kwargs)
+
+    def update_entity(self, entity, **kwargs):
+        if self.active_record['type'] == 'list':
+            return self.model.update_task(entity, **kwargs)
+        else:
+            assert self.active_record['type'] == 'task'
+            return self.model.update_subtask(entity, **kwargs)
 
     def handler(self, widget, new_state, task):
         alarm = getattr(widget, 'alarm', None)
@@ -75,15 +98,24 @@ class TasksController(SubController):
             self.remove_alarm(alarm)
         else:
             widget.alarm = self.set_alarm_in(
-                self.completion_timeout, self.mark_completed,
+                self.completion_timeout, self._mark_completed_callback,
                 user_data=(task, widget)
             )
 
-    def add_new_task(self, task):
-        self.view.insert_new(task)
+    def _mark_completed_callback(self, _, user_data):
+        task, widget = user_data
+        self.model.update_task(task, completed=True)
+        self.view.remove_task_element(widget)
 
-    def update_element(self, index, task):
-        self.view.replace_task_element(index, task)
+    def add_new_element(self, element):
+        self.view.insert_new(element)
+
+    def update_element(self, index, entity):
+        self.view.replace_task_element(index, entity)
+
+    def display_subtasks(self, task):
+        self.active_record = task
+        self.refresh()
 
 
 class EditTaskController(SubController):
@@ -96,12 +128,13 @@ class EditTaskController(SubController):
     def abort(self):
         self.root.display_task_list()
 
-    def handler(self, task, index, task_title):
+    def handler(self, entity, index, title):
         self.root.display_task_list()
-        if len(task_title) == 0:
+        if len(title) == 0:
             return
-        task = self.model.update_task(task, title=task_title)
-        self.root.tasks_controller.update_element(index, task)
+        tasks_controller = self.root.tasks_controller
+        entity = tasks_controller.update_entity(entity, title=title)
+        tasks_controller.update_element(index, entity)
         self.view.clear()
 
     def refresh(self):
@@ -114,12 +147,12 @@ class CreateController(EditTaskController):
         self.view.register_callback(self.handler)
 
     def handler(self, title):
-        active_record = self.root.tasks_controller.active_record
         self.root.display_task_list()
         if len(title) == 0:
             return
-        task = self.model.create_task(active_record, title=title)
-        self.root.tasks_controller.add_new_task(task)
+        tasks_controller = self.root.tasks_controller
+        entity = tasks_controller.create_entity(title=title, completed=False)
+        tasks_controller.add_new_element(entity)
         self.view.clear()
 
 

@@ -49,7 +49,7 @@ class TasksView(SelectorView):
             self._pile.extend(tasks)
 
     @property
-    def focus_task(self):
+    def focus_entity(self):
         return self._pile[self._pile.focus_position]
 
     def insert_new(self, task, index=0):
@@ -99,7 +99,7 @@ class EditView(urwid.WidgetWrap):
 
 class EditExistingTaskView(EditView):
     def populate(self):
-        task = self.tasks_view.focus_task
+        task = self.tasks_view.focus_entity
         position = self.tasks_view.focus_position
         self._edit_widget.enter_callback = partial(self._base_callback,
                                                    task, position)

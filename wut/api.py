@@ -3,10 +3,14 @@ from functools import wraps
 from hammock import Hammock
 import requests
 
-TASK_CREATE_PROPERTIES = ('title', 'assignee_id', 'completed',
-                          'recurrence_type', 'recurrence_count', 'due_date',
-                          'starred')
 
+SUBTASK_CREATE_PROPERTIES = ('title', 'completed')
+TASK_CREATE_PROPERTIES = SUBTASK_CREATE_PROPERTIES + (
+    'assignee_id', 'recurrence_type', 'recurrence_count',
+    'due_date', 'starred'
+)
+
+SUBTASK_UPDATE_PROPERTIES = SUBTASK_CREATE_PROPERTIES
 TASK_UPDATE_PROPERTIES = TASK_CREATE_PROPERTIES + ('remove',)
 
 MAX_TITLE_LENGTH = 255
@@ -45,7 +49,7 @@ def extract(key):
             if isinstance(arg, Mapping):
                 return f(self, arg[key], *args, **kwargs)
             else:
-                return f(arg, *args, **kwargs)
+                return f(self, arg, *args, **kwargs)
         return wrapped
     return wrapper_builder
 
@@ -88,25 +92,59 @@ class WunderListAPI(object):
         params = {'list_id': list_id, 'completed': completed}
         return self.client.tasks().GET(params=params, headers=self.headers)
 
+    @extract('id')
+    @return_json
+    def task(self, id_):
+        return self.client.tasks(id_).GET(headers=self.headers)
+
+    @extract('id')
+    @return_json
+    def subtasks(self, task_id, completed=False):
+        # You can also grab all(?) subtasks based on a list_id, but ignore
+        # that for now.
+        params = {'task_id': task_id, 'completed': completed}
+        return self.client.subtasks().GET(params=params, headers=self.headers)
+
     @return_json
     def lists(self):
         return self.client.lists().GET(headers=self.headers)
+
+    @extract('id')
+    @return_json
+    def list(self, id_):
+        return self.client.lists(id_).GET(headers=self.headers)
 
     @return_json
     @allowed_keywords(TASK_CREATE_PROPERTIES)
     @extract('id')
     def create_task(self, list_id, **kwargs):
+        return self._create(self.client.tasks, 'list_id', list_id, **kwargs)
+
+    @return_json
+    @allowed_keywords(SUBTASK_CREATE_PROPERTIES)
+    @extract('id')
+    def create_subtask(self, task_id, **kwargs):
+        return self._create(self.client.subtasks, 'task_id', task_id, **kwargs)
+
+    def _create(self, endpoint, container_key, container_id, **kwargs):
         if 'title' not in kwargs:  # TODO: kw-only argument (vim sucks)
             raise KeyError('title is required')
-        kwargs['list_id'] = list_id
-        return self.client.tasks().POST(json=kwargs, headers=self.headers)
+        kwargs[container_key] = container_id
+        return endpoint.POST(json=kwargs, headers=self.headers)
 
     @return_json
     @allowed_keywords(TASK_UPDATE_PROPERTIES)
     def update_task(self, task, **kwargs):
-        kwargs['revision'] = int(task['revision'])
-        return self.client.tasks(task['id']).PATCH(json=kwargs,
-                                                   headers=self.headers)
+        return self._update(self.client.tasks, task, **kwargs)
+
+    @return_json
+    @allowed_keywords(SUBTASK_UPDATE_PROPERTIES)
+    def update_subtask(self, subtask, **kwargs):
+        return self._update(self.client.subtasks, subtask, **kwargs)
+
+    def _update(self, endpoint, entity, **kwargs):
+        kwargs['revision'] = int(entity['revision'])
+        return endpoint(entity['id']).PATCH(json=kwargs, headers=self.headers)
 
     @raise_for_status
     def delete_task(self, task):
