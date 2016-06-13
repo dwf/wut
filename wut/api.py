@@ -44,9 +44,9 @@ def reorder(entities, positions):
 
     """
     entities = {e['id']: e for e in entities}
-    not_appearing = sorted(entities.keys() - set(positions))
-    ordered = list(chain((entities[p] for p in positions if p in entities),
-                         (entities[p] for p in not_appearing)))
+    not_appearing = sorted(entities.keys() - set(positions), reverse=True)
+    ordered = list(chain((entities[p] for p in not_appearing),
+                         (entities[p] for p in positions if p in entities)))
     return ordered
 
 
