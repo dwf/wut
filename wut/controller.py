@@ -121,8 +121,12 @@ class TasksController(SubController):
 
     def _mark_completed_callback(self, new_state, _, user_data):
         task, widget = user_data
-        self.model.update_task(task, completed=new_state)
-        self.view.remove_task_element(widget)
+        if task['type'] == 'task':
+            self.model.update_task(task, completed=new_state)
+            self.view.remove_task_element(widget)
+        else:
+            assert task['type'] == 'subtask'
+            self.model.update_subtask(task, completed=new_state)
 
     def add_new_element(self, entity):
         if entity['completed'] == self.show_completed:
