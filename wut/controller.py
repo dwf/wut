@@ -1,3 +1,4 @@
+from functools import partial
 import urwid
 
 
@@ -40,6 +41,10 @@ class TasksController(SubController):
     """Controller that handles the tasks/subtasks selection dialog."""
     completion_timeout = 0.8
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.show_completed = False
+
     def keypress(self, size, key):
         if key == 'backspace' or key == 'left':
             self.abort()
@@ -51,6 +56,9 @@ class TasksController(SubController):
             self.root.display_edit_dialog()
         elif key.lower() == 's' and self.active_record['type'] == 'list':
             self.active_record = self.view.focus_entity
+            self.refresh()
+        elif key.lower() == 'c':
+            self.show_completed = not self.show_completed
             self.refresh()
         else:
             return super().keypress(size, key)
@@ -82,7 +90,7 @@ class TasksController(SubController):
         else:
             assert self.active_record['type'] == 'task'
             f = self.model.subtasks
-        entities = f(self.active_record)
+        entities = f(self.active_record, completed=self.show_completed)
         self.view.populate(entities, reset_focus=reset_focus)
 
     def create_entity(self, **kwargs):
@@ -106,17 +114,19 @@ class TasksController(SubController):
             self.remove_alarm(alarm)
         else:
             widget.alarm = self.set_alarm_in(
-                self.completion_timeout, self._mark_completed_callback,
+                self.completion_timeout,
+                partial(self._mark_completed_callback, new_state),
                 user_data=(task, widget)
             )
 
-    def _mark_completed_callback(self, _, user_data):
+    def _mark_completed_callback(self, new_state, _, user_data):
         task, widget = user_data
-        self.model.update_task(task, completed=True)
+        self.model.update_task(task, completed=new_state)
         self.view.remove_task_element(widget)
 
-    def add_new_element(self, element):
-        self.view.insert_new(element)
+    def add_new_element(self, entity):
+        if entity['completed'] == self.show_completed:
+            self.view.insert_new(entity)
 
     def update_element(self, index, entity):
         self.view.replace_task_element(index, entity)

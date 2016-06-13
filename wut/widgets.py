@@ -76,6 +76,7 @@ class TaskPile(CallbackEntityPile):
     def build_widget(self, task):
         checkbox = urwid.CheckBox(task['title'],
                                   on_state_change=self.callback,
+                                  state=task['completed'],
                                   user_data=task)
         return urwid.AttrMap(checkbox, None, focus_map='reversed')
 

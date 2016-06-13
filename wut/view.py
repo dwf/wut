@@ -19,7 +19,12 @@ def preserve_focus(widget, delta=0, reset=False):
         except IndexError:
             pass
     elif old_focus is not None:
-        widget.focus_position = old_focus + delta
+        try:
+            widget.focus_position = old_focus + delta
+        except IndexError:
+            # This might fail when e.g. switching between
+            # completed/not completed view.
+            pass
 
 
 class SelectorView(urwid.WidgetWrap):
