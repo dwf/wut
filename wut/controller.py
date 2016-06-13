@@ -2,6 +2,12 @@ import urwid
 
 
 class SubController(urwid.WidgetWrap):
+    """Base class for sub-controllers concerned with a single function.
+
+    These sit between the Controller (a.k.a. urwid MainLoop) and
+    the View in the widget hierarchy, so they can capture keypresses.
+
+    """
     def __init__(self, root, view):
         self.root = root
         self.view = view
@@ -21,6 +27,7 @@ class SubController(urwid.WidgetWrap):
 
 
 class ListsController(SubController):
+    """Controller that handles the list selection dialog."""
     def refresh(self):
         lists = self.model.lists()
         self.view.populate(lists)
@@ -30,6 +37,7 @@ class ListsController(SubController):
 
 
 class TasksController(SubController):
+    """Controller that handles the tasks/subtasks selection dialog."""
     completion_timeout = 0.8
 
     def keypress(self, size, key):
@@ -119,6 +127,7 @@ class TasksController(SubController):
 
 
 class EditTaskController(SubController):
+    """Controller that handles the tasks/subtasks edit dialog."""
     def keypress(self, size, key):
         if key == 'esc':
             self.abort()
@@ -142,6 +151,7 @@ class EditTaskController(SubController):
 
 
 class CreateController(EditTaskController):
+    """Controller that handles the task/subtask creation dialog."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.view.register_callback(self.handler)
@@ -157,6 +167,13 @@ class CreateController(EditTaskController):
 
 
 class Controller(urwid.MainLoop):
+    """Root controller for the application.
+
+    Subclass of urwid's MainLoop, so it can handle the topmost widget
+    (aliased as ``active_controller``), adding/removing alarms, unhandled
+    keyboard input, etc.
+
+    """
     def __init__(self, model, view):
         self.model = model
         self.view = view
