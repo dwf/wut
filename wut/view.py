@@ -58,6 +58,10 @@ class TasksView(SelectorView):
     def focus_entity(self):
         return self._pile[self._pile.focus_position]
 
+    @property
+    def focus_widget(self):
+        return self._pile.contents[self._pile.focus_position][0].base_widget
+
     def insert_new(self, task, index=0):
         with preserve_focus(self._pile, delta=1):
             self._pile.insert(0, task)
@@ -80,21 +84,26 @@ class ListsView(SelectorView):
             self._pile.extend(lists)
 
 
+class DialogOverlay(urwid.Overlay):
+    def __init__(self, widget, underneath, **kwargs):
+        defaults = dict(width=('relative', 80), height=('relative', 30),
+                        align='center', valign='middle', min_height=8)
+        for k, v in defaults.items():
+            kwargs.setdefault(k, v)
+        super().__init__(urwid.LineBox(urwid.Padding(widget, left=3,
+                                                     right=3)),
+                         underneath, **kwargs)
+
+
 class EditView(urwid.WidgetWrap):
     def __init__(self, tasks_view, caption, callback=None):
         self._edit_widget = TitleEdit(callback)
         self.tasks_view = tasks_view
-        super().__init__(urwid.Overlay(
-            urwid.LineBox(
-                urwid.Padding(urwid.ListBox([
-                    urwid.Text(caption),
-                    urwid.Divider(),
-                    urwid.LineBox(self._edit_widget)
-                ]), left=3, right=3)
-            ),
-            tasks_view, width=('relative', 80),
-            height=('relative', 30), align='center', valign='middle',
-            min_height=8))
+        super().__init__(DialogOverlay(urwid.ListBox([
+            urwid.Text(caption),
+            urwid.Divider(),
+            urwid.LineBox(self._edit_widget)
+        ]), tasks_view))
 
     def register_callback(self, callback):
         self._edit_widget.enter_callback = callback
@@ -116,6 +125,37 @@ class EditExistingTaskView(EditView):
         self._base_callback = callback
 
 
+class YesNoView(urwid.WidgetWrap):
+    def __init__(self, tasks_view, caption, callback=None,
+                 cancel_callback=None):
+        self.tasks_view = tasks_view
+        self.yes = urwid.Button('Yes', on_press=self._yes_handler)
+        self.no = urwid.Button('No', on_press=self._no_handler)
+        self._callback = callback
+        self._cancel_callback = cancel_callback
+        flow = urwid.GridFlow([self.yes, self.no], cell_width=10,
+                              h_sep=10, v_sep=0, align='center')
+        flow.focus_position = 1
+        super().__init__(DialogOverlay(urwid.ListBox([
+            urwid.Text(caption),
+            urwid.Divider(),
+            flow
+        ]), tasks_view, height=('relative', 15)))
+
+    def _yes_handler(self, _):
+        self._callback(self.tasks_view.focus_entity,
+                       self.tasks_view.focus_widget)
+
+    def _no_handler(self, _):
+        self._cancel_callback()
+
+    def register_callback(self, callback):
+        self._callback = callback
+
+    def register_cancel_callback(self, callback):
+        self._cancel_callback = callback
+
+
 class View:
     palette = [('reversed', 'black', 'white', 'standout')]
 
@@ -126,3 +166,4 @@ class View:
                                     'Title for new task:')
         self.edit_task_view = EditExistingTaskView(self.tasks_view,
                                                    'New title for task:')
+        self.delete_task_view = YesNoView(self.tasks_view, 'Are you sure?')

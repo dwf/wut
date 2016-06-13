@@ -22,7 +22,7 @@ def raise_for_status(f):
     def wrapped(*args, **kwargs):
         raw = f(*args, **kwargs)
         raw.raise_for_status()
-        return raw
+        return raw.ok
     return wrapped
 
 
@@ -177,4 +177,4 @@ class WunderListAPI(object):
     def delete_task(self, task):
         params = {'revision': task['revision']}
         return (self.client.tasks(task['id'])
-                .DELETE(params=params, headers=self.headers).json())
+                .DELETE(params=params, headers=self.headers))

@@ -60,6 +60,8 @@ class TasksController(SubController):
         elif key.lower() == 'c':
             self.show_completed = not self.show_completed
             self.refresh()
+        elif key.lower() == 'd':
+            self.root.display_delete_dialog()
         else:
             return super().keypress(size, key)
 
@@ -140,17 +142,19 @@ class TasksController(SubController):
         self.refresh()
 
 
-class EditTaskController(SubController):
-    """Controller that handles the tasks/subtasks edit dialog."""
+class TaskPopup(SubController):
     def keypress(self, size, key):
         if key == 'esc':
             self.abort()
         else:
             super().keypress(size, key)
 
-    def abort(self):
+    def abort(self, *args):
         self.root.display_task_list()
 
+
+class EditTaskController(TaskPopup):
+    """Controller that handles the tasks/subtasks edit dialog."""
     def handler(self, entity, index, title):
         self.root.display_task_list()
         if len(title) == 0:
@@ -164,7 +168,7 @@ class EditTaskController(SubController):
         self.view.populate()
 
 
-class CreateController(EditTaskController):
+class CreateController(TaskPopup):
     """Controller that handles the task/subtask creation dialog."""
     def handler(self, title):
         self.root.display_task_list()
@@ -174,6 +178,22 @@ class CreateController(EditTaskController):
         entity = tasks_controller.create_entity(title=title, completed=False)
         tasks_controller.add_new_element(entity)
         self.view.clear()
+
+
+class DeleteController(TaskPopup):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.view.register_cancel_callback(self.abort)
+        self.view.register_callback(self.handler)
+
+    def handler(self, entity, widget):
+        if entity['type'] == 'task':
+            self.model.delete_task(entity)
+        else:
+            assert entity['type'] == 'subtask'
+            self.model.delete_subtask(entity)
+        self.view.tasks_view.remove_task_element(widget)
+        self.root.display_task_list()
 
 
 class Controller(urwid.MainLoop):
@@ -192,6 +212,8 @@ class Controller(urwid.MainLoop):
         self.create_controller = CreateController(self, view.create_view)
         self.edit_task_controller = EditTaskController(self,
                                                        view.edit_task_view)
+        self.delete_task_controller = DeleteController(self,
+                                                       view.delete_task_view)
         super().__init__(self.lists_controller,
                          view.palette,
                          unhandled_input=self.keypress)
@@ -227,4 +249,8 @@ class Controller(urwid.MainLoop):
 
     def display_edit_dialog(self):
         self.active_controller = self.edit_task_controller
+        self.active_controller.refresh()
+
+    def display_delete_dialog(self):
+        self.active_controller = self.delete_task_controller
         self.active_controller.refresh()
