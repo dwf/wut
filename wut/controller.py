@@ -149,6 +149,9 @@ class TaskPopup(SubController):
         else:
             super().keypress(size, key)
 
+    def refresh(self):
+        pass
+
     def abort(self, *args):
         self.root.display_task_list()
 
